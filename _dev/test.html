@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>boot</title></head>
+<body>
+<div id="hud"><span id="vLives"></span><span id="vGold"></span><span id="vWave"></span>
+<button id="btnWave"></button><button id="btnSpeed"></button><button id="btnPause"></button><button id="btnSound"></button>
+<div id="nextPrev"></div><div id="chipGold"></div></div>
+<div id="stage"><canvas id="game" width="1280" height="704"></canvas>
+<div id="titleOv"></div><div id="pauseOv"></div><div id="endOv"></div>
+<div id="endTitle"></div><div id="endSub"></div><div id="stWave"></div><div id="stKill"></div><div id="stGold"></div><div id="stBuild"></div><div id="btnEndless"></div></div>
+<div id="shop"></div><div id="tipText"></div>
+<div id="selPanel"></div><canvas id="selIcon"></canvas><div id="selName"></div><div id="selLvl"></div>
+<div id="selStats"></div><button id="btnUp"></button><button id="btnSell"></button><div id="app"></div>
+<button id="btnStart"></button><button id="btnResume"></button><button id="btnRetry"></button>
+<script src="../game.js"></script>
+<script>
+try {
+  const g = GAME.game;
+  GAME.startGame();
+  const BUY = [
+    ['arrow', 12, 5], ['arrow', 24, 5], ['frost', 17, 7], ['arrow', 12, 6],
+    ['arc', 20, 10], ['cannon', 31, 5], ['arrow', 16, 1], ['prism', 20, 1],
+    ['frost', 14, 11], ['arrow', 8, 13], ['prism', 35, 14], ['cannon', 21, 13],
+    ['arc', 16, 15], ['cannon', 31, 16], ['prism', 24, 11], ['frost', 34, 14],
+    ['arrow', 31, 13], ['arc', 11, 11], ['prism', 26, 17], ['arrow', 35, 7],
+    ['cannon', 28, 1], ['frost', 17, 5], ['arrow', 34, 6], ['prism', 20, 13],
+  ];
+  let buyIdx = 0;
+  let totalLeaks = 0;
+  const log = [];
+  function shopPhase(w) {
+    // aggressive buy: any affordable tower
+    let bought = true;
+    while (bought) {
+      bought = false;
+      for (let i = buyIdx; i < BUY.length; i++) {
+        const [ty, c, r] = BUY[i];
+        if (g.gold >= GAME.TOWERS[ty].cost) { if (GAME.placeTowerAt(ty, c, r)) { buyIdx = i + 1; bought = true; break; } }
+      }
+    }
+    // upgrade cheapest-level tower until nearly broke
+    let guard = 0;
+    while (guard++ < 200) {
+      const sorted = g.towers.filter(t => t.lvl < 3)
+        .sort((a, b) => a.lvl - b.lvl || a.def.tiers[a.lvl].cost - b.def.tiers[b.lvl].cost);
+      const t = sorted[0];
+      if (!t) break;
+      const cost = t.def.tiers[t.lvl].cost;
+      if (g.gold < cost + 5) break;
+      upgradeTower(t);
+    }
+  }
+  for (let w = 1; w <= 20; w++) {
+    shopPhase(w);
+    startWave();
+    let it = 0;
+    while (g.waveActive && g.state === 'play' && it < 60 * 300) {
+      step(1 / 60); it++;
+      if (it % 30 === 0) {
+        g.bt = g.bt || {};
+        for (const e of g.enemies) if (e.alive && e.def.boss) g.bt[e.id] = { w: g.wave, hp: Math.round(e.hp), max: e.maxHp, d: Math.round(e.dist) };
+      }
+    }
+    log.push('w' + w + ':' + (g.state !== 'play' ? 'END' : (g.lives, 'l' + g.lives + 'i' + Math.round(it / 60) + 's g' + g.gold)));
+    if (g.state !== 'play') break;
+  }
+  let extra = '';
+  if (g.state === 'win') {
+    try {
+      endEndless();
+      for (let w = 21; w <= 23; w++) {
+        shopPhase2(w); startWave();
+        let it = 0;
+        while (g.waveActive && g.state === 'play' && it < 60 * 300) { step(1 / 60); it++; }
+        extra = 'E' + w + ':l' + g.lives + 's' + Math.round(it / 60);
+        if (g.state !== 'play') break;
+      }
+    } catch (e2) { extra = 'EERR:' + e2.message; }
+  }
+  function shopPhase2(w) { /* keep buying via spare slots if possible */ }
+  document.title = 'RESULT|state=' + g.state + '|wave=' + g.wave + '|lives=' + g.lives + '|kills=' + g.stats.kills +
+    '|gold=' + g.stats.gold + '|towers=' + g.towers.length + '|BOSS=' + JSON.stringify(g.bt || {}) + '|' + (extra || '-') + '|' + log.join(';');
+} catch (err) {
+  document.title = 'ERR|' + String(err && err.message || err);
+}
+</script>
+</body></html>
